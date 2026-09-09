@@ -173,10 +173,10 @@ class ControlPanel(QMainWindow):
     def _quality_group(self) -> QGroupBox:
         box = QGroupBox("Qualidade do reconhecimento")
         layout = QVBoxLayout(box)
-        self.quality_turbo = QRadioButton("Turbo (rápido, ~1.5 GB VRAM)")
-        self.quality_medium = QRadioButton("Medium (recomendado — mais preciso)")
+        self.quality_turbo = QRadioButton("Turbo (recomendado na GPU 8 GB — mais rápido)")
+        self.quality_medium = QRadioButton("Medium (mais preciso, um pouco mais lento)")
         self.quality_small = QRadioButton("Small (mais leve)")
-        self.quality_medium.setChecked(True)
+        self.quality_turbo.setChecked(True)
         layout.addWidget(self.quality_turbo)
         layout.addWidget(self.quality_medium)
         layout.addWidget(self.quality_small)

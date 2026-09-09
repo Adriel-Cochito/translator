@@ -28,7 +28,7 @@ def test_settings_roundtrip(tmp_path: Path) -> None:
 def test_missing_config_returns_defaults(tmp_path: Path) -> None:
     loaded = load_settings(tmp_path / "missing.json")
     assert loaded.mode is AppMode.EN_PT
-    assert loaded.asr_quality is AsrQuality.MEDIUM
+    assert loaded.asr_quality is AsrQuality.TURBO
     assert loaded.mic_enabled is False
     assert loaded.system_enabled is True
     assert loaded.detect_multiple_voices is False

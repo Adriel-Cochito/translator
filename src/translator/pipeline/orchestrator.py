@@ -90,7 +90,7 @@ class PipelineOrchestrator(QObject):
         self._emit_status(True, "Carregando modelos… o áudio já está aberto", device.reason, str(settings.asr_quality), "loading")
         self._asr = AsrEngine(settings.asr_quality, device_choice=device)
         self._asr.load()
-        self._translator = NllbTranslator()
+        self._translator = NllbTranslator(device_choice=device)
         try:
             self._translator.load()
         except Exception as exc:
@@ -105,7 +105,9 @@ class PipelineOrchestrator(QObject):
         self._collector = UtteranceCollector(scorer=create_speech_scorer())
         self._loaded = True
         note = self._asr.fallback_message or f"Pronto ({self._asr.device_choice.reason})"
-        if self._translator is None:
+        if self._translator is not None:
+            note += f" · NLLB {self._translator.runtime_reason}"
+        else:
             note += " · tradução de texto indisponível até o setup"
         self.models_loaded.emit(note)
         phase = "listening" if self._processing else "stopped"

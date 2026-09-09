@@ -3,6 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Never
 
+from translator.asr.gpu import (
+    DeviceChoice,
+    cuda_vram_mb,
+    detect_device,
+    is_cuda_runtime_error,
+    is_out_of_memory,
+    nllb_runtime,
+)
 from translator.paths import nllb_dir
 
 try:
@@ -37,8 +45,10 @@ def nllb_codes(direction: TranslationDirection) -> tuple[str, str]:
 
 
 class NllbTranslator:
-    def __init__(self, model_dir: Path | None = None) -> None:
+    def __init__(self, model_dir: Path | None = None, device_choice: DeviceChoice | None = None) -> None:
         self.model_dir = model_dir or nllb_dir()
+        self.device_choice = device_choice
+        self.runtime_reason = "CPU, int8"
         self._translator = None
         self._tokenizer = None
 
@@ -46,7 +56,16 @@ class NllbTranslator:
         if ctranslate2 is None or AutoTokenizer is None:
             raise RuntimeError("ctranslate2 ou transformers não está instalado.")
         model_path = resolve_nllb_model_path(self.model_dir)
-        self._translator = ctranslate2.Translator(str(model_path), device="cpu", compute_type="int8")
+        choice = self.device_choice or detect_device()
+        device, compute_type = nllb_runtime(choice, cuda_vram_mb())
+        try:
+            self._translator = ctranslate2.Translator(str(model_path), device=device, compute_type=compute_type)
+            self.runtime_reason = f"{device}, {compute_type}"
+        except Exception as exc:
+            if device == "cpu" or not (is_out_of_memory(exc) or is_cuda_runtime_error(exc)):
+                raise
+            self._translator = ctranslate2.Translator(str(model_path), device="cpu", compute_type="int8")
+            self.runtime_reason = "CPU, int8 (fallback)"
         cache = self.model_dir / "tokenizer"
         cache.mkdir(parents=True, exist_ok=True)
         self._tokenizer = AutoTokenizer.from_pretrained(NLLB_TOKENIZER_REPO, cache_dir=str(cache))

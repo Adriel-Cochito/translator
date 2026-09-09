@@ -10,6 +10,7 @@ numpy>=1.26.0
 transformers>=4.44.0
 sentencepiece>=0.2.0
 huggingface-hub>=0.25.0
+truststore>=0.10.0
 speechbrain>=1.0.1
 silero-vad>=5.1.2
 torch>=2.4.0

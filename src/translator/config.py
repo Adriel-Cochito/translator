@@ -28,7 +28,7 @@ SubtitleLanguage = Literal["en", "pt"]
 class Settings:
     mode: AppMode = AppMode.EN_PT
     subtitle_language: SubtitleLanguage = "en"
-    asr_quality: AsrQuality = AsrQuality.MEDIUM
+    asr_quality: AsrQuality = AsrQuality.TURBO
     mic_enabled: bool = False
     system_enabled: bool = True
     mic_device: str | None = None

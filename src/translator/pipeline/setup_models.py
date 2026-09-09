@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from translator.asr.gpu import detect_device
+from translator.asr.gpu import cuda_vram_mb, detect_device, nllb_runtime
 from translator.paths import ecapa_dir, nllb_dir, silero_dir, whisper_dir
+from translator.ssl_certs import ensure_tls, is_ssl_error, retry_insecure_tls
 from translator.translation.nllb import NLLB_CT2_REPO, NLLB_TOKENIZER_REPO, nllb_is_ready
 
 try:
@@ -50,11 +51,14 @@ def whisper_marker_exists() -> bool:
 
 def download_models(progress: ProgressCallback | None = None) -> None:
     log = progress or (lambda _message: None)
+    ensure_tls()
     log("Detectando GPU...")
     device = detect_device()
     log(f"Dispositivo: {device.reason}")
+    nllb_device, nllb_compute = nllb_runtime(device, cuda_vram_mb())
+    log(f"Tradução NLLB: {nllb_device}, {nllb_compute}")
 
-    log("Baixando modelo de tradução NLLB (CPU)...")
+    log("Baixando modelo de tradução NLLB...")
     _download_nllb(log)
 
     log("Preparando Whisper (pode baixar na primeira transcrição)...")
@@ -69,6 +73,17 @@ def download_models(progress: ProgressCallback | None = None) -> None:
     log("Arquivos básicos prontos. O restante baixa na primeira escuta, se faltar.")
 
 
+def _run_with_ssl_retry(log: ProgressCallback, label: str, action: Callable[[], object]) -> None:
+    try:
+        action()
+    except Exception as exc:
+        if not is_ssl_error(exc):
+            raise
+        log(f"Certificado SSL bloqueou {label}; tentando de novo...")
+        retry_insecure_tls()
+        action()
+
+
 def _download_nllb(log: ProgressCallback) -> None:
     if snapshot_download is None or AutoTokenizer is None:
         raise RuntimeError("huggingface-hub ou transformers não está instalado.")
@@ -76,15 +91,20 @@ def _download_nllb(log: ProgressCallback) -> None:
     if nllb_is_ready(target):
         log("NLLB já está no disco.")
     else:
-        snapshot_download(
-            repo_id=NLLB_CT2_REPO,
-            local_dir=str(target),
+        _run_with_ssl_retry(
+            log,
+            "NLLB",
+            lambda: snapshot_download(repo_id=NLLB_CT2_REPO, local_dir=str(target)),
         )
         log("NLLB baixado.")
 
     tokenizer_dir = target / "tokenizer"
     tokenizer_dir.mkdir(parents=True, exist_ok=True)
-    AutoTokenizer.from_pretrained(NLLB_TOKENIZER_REPO, cache_dir=str(tokenizer_dir))
+    _run_with_ssl_retry(
+        log,
+        "tokenizer NLLB",
+        lambda: AutoTokenizer.from_pretrained(NLLB_TOKENIZER_REPO, cache_dir=str(tokenizer_dir)),
+    )
     log("Tokenizer NLLB pronto.")
 
 
@@ -94,7 +114,7 @@ def warmup_optional_models(log: ProgressCallback | None = None) -> None:
         if load_silero_vad is None:
             raise RuntimeError("silero-vad não instalado")
         callback("Carregando Silero VAD...")
-        load_silero_vad()
+        _run_with_ssl_retry(callback, "Silero VAD", load_silero_vad)
         callback("Silero VAD pronto.")
     except Exception as exc:
         callback(f"Silero VAD opcional falhou ({exc}). Usando VAD por energia.")
@@ -110,7 +130,11 @@ def warmup_optional_models(log: ProgressCallback | None = None) -> None:
         }
         if LocalStrategy is not None:
             kwargs["local_strategy"] = LocalStrategy.COPY
-        EncoderClassifier.from_hparams(**kwargs)
+        _run_with_ssl_retry(
+            callback,
+            "ECAPA",
+            lambda: EncoderClassifier.from_hparams(**kwargs),
+        )
         callback("ECAPA pronto.")
     except Exception as exc:
         callback(f"ECAPA opcional falhou ({exc}). Cada fonte vira uma pessoa.")
@@ -123,11 +147,15 @@ def prefetch_whisper(quality: str, log: ProgressCallback | None = None) -> None:
             raise RuntimeError("faster-whisper não instalado")
         device = detect_device()
         callback(f"Baixando Whisper {quality} ({device.reason})...")
-        WhisperModel(
-            quality,
-            device=device.device,
-            compute_type=device.compute_type,
-            download_root=str(whisper_dir()),
+        _run_with_ssl_retry(
+            callback,
+            f"Whisper {quality}",
+            lambda: WhisperModel(
+                quality,
+                device=device.device,
+                compute_type=device.compute_type,
+                download_root=str(whisper_dir()),
+            ),
         )
         callback(f"Whisper {quality} pronto.")
     except Exception as exc:
