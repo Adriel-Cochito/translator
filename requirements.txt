@@ -1,0 +1,17 @@
+faster-whisper>=1.1.1
+ctranslate2>=4.5.0
+nvidia-cublas-cu12>=12.4.0
+nvidia-cudnn-cu12>=9.0.0
+nvidia-cuda-runtime-cu12>=12.4.0
+PySide6>=6.7.0
+sounddevice>=0.5.1
+PyAudioWPatch>=0.2.12.7
+numpy>=1.26.0
+transformers>=4.44.0
+sentencepiece>=0.2.0
+huggingface-hub>=0.25.0
+speechbrain>=1.0.1
+silero-vad>=5.1.2
+torch>=2.4.0
+torchaudio>=2.4.0
+pytest>=8.3.0
